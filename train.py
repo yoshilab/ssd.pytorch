@@ -14,10 +14,16 @@ import torch.nn.init as init
 import torch.utils.data as data
 import numpy as np
 import argparse
+import logging
 
 
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
+
+
+formatter = '%(levelname)s : %(asctime)s : %(message)s'
+logging.basicConfig(level=logging.INFO, format=formatter)
+logger = logging.getLogger(__name__)
 
 
 parser = argparse.ArgumentParser(
@@ -73,7 +79,7 @@ def train():
         if args.dataset_root == VOC_ROOT:
             if not os.path.exists(COCO_ROOT):
                 parser.error('Must specify dataset_root if specifying dataset')
-            print("WARNING: Using default COCO dataset_root because " +
+            logger.info("WARNING: Using default COCO dataset_root because " +
                   "--dataset_root was not specified.")
             args.dataset_root = COCO_ROOT
         cfg = coco
@@ -123,18 +129,18 @@ def train():
         cudnn.benchmark = True
 
     if args.resume:
-        print('Resuming training, loading {}...'.format(args.resume))
+        logger.info('Resuming training, loading {}...'.format(args.resume))
         ssd_net.load_weights(args.resume)
     else:
         vgg_weights = torch.load(args.save_folder + args.basenet)
-        print('Loading base network...')
+        logger.info('Loading base network...')
         ssd_net.vgg.load_state_dict(vgg_weights)
 
     if args.cuda:
         net = net.cuda()
 
     if not args.resume:
-        print('Initializing weights...')
+        logger.info('Initializing weights...')
         # initialize newly added layers' weights with xavier method
         ssd_net.extras.apply(weights_init)
         ssd_net.loc.apply(weights_init)
@@ -144,18 +150,17 @@ def train():
                           weight_decay=args.weight_decay)
     criterion = MultiBoxLoss(cfg['num_classes'], 0.5, True, 0, True, 3, 0.5,
                              False, args.cuda)
-
     net.train()
     # loss counters
     loc_loss = 0
     conf_loss = 0
     epoch = 0
-    print('Loading the dataset...')
+    logger.info('Loading the dataset...')
 
     epoch_size = len(dataset) // args.batch_size
-    print('Training SSD on:', dataset.name)
-    print('Using the specified args:')
-    print(args)
+    logger.info('Training SSD on: {}'.format(dataset.name))
+    logger.info('Using the specified args:')
+    logger.info(args)
 
     step_index = 0
 
@@ -209,17 +214,18 @@ def train():
         conf_loss += loss.c.item()
 
         if iteration % 10 == 0:
-            print('timer: %.4f sec.' % (t1 - t0))
-            print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.data[0]), end=' ')
+            logger.info('timer: {:04f} sec. iter: {} {} lr: {}'.format((t1 - t0), repr(iteration),
+                                                                       'Loss: %.4f' % (loss.item()),
+                                                                       optimizer.param_groups[0]['lr']))
 
         if args.visdom:
             update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
                             iter_plot, epoch_plot, 'append')
 
-        if iteration != 0 and iteration % 5000 == 0:
-            print('Saving state, iter:', iteration)
-            torch.save(ssd_net.state_dict(), 'weights/ssd300_COCO_' +
-                       repr(iteration) + '.pth')
+        if iteration != 0 and iteration % 1000 == 0:
+            logger.info('Saving state, iter: {}'.format(iteration))
+            save_path = os.path.join(args.save_folder, 'ssd300_COCO_{}.pth'.format(repr(iteration)))
+            torch.save(ssd_net.state_dict(), save_path)
     torch.save(ssd_net.state_dict(),
                args.save_folder + '' + args.dataset + '.pth')
 
