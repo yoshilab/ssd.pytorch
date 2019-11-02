@@ -121,12 +121,15 @@ def train():
         import visdom
         viz = visdom.Visdom()
 
-    ssd_net = build_ssd('train', cfg['min_dim'], cfg['num_classes'])
+    ssd_net = build_ssd('train', cfg, cfg['min_dim'], cfg['num_classes'])
     net = ssd_net
 
+
+    """
     if args.cuda:
         net = torch.nn.DataParallel(ssd_net)
         cudnn.benchmark = True
+    """
 
     if args.resume:
         logger.info('Resuming training, loading {}...'.format(args.resume))
@@ -190,7 +193,11 @@ def train():
             adjust_learning_rate(optimizer, args.gamma, step_index)
 
         # load train data
-        images, targets = next(batch_iterator)
+        try:
+            images, targets = next(batch_iterator)
+        except StopIteration:
+            batch_iterator = iter(data_loader)
+            images, targets = next(batch_iterator)
 
         if args.cuda:
             images = Variable(images.cuda())
@@ -211,7 +218,7 @@ def train():
         #loc_loss += loss_l.data[0]
         #conf_loss += loss_c.data[0]
         loc_loss += loss_l.item()
-        conf_loss += loss.c.item()
+        conf_loss += loss_c.item()
 
         if iteration % 10 == 0:
             logger.info('timer: {:04f} sec. iter: {} {} lr: {}'.format((t1 - t0), repr(iteration),
@@ -219,7 +226,7 @@ def train():
                                                                        optimizer.param_groups[0]['lr']))
 
         if args.visdom:
-            update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
+            update_vis_plot(iteration, loss_l.item(), loss_c.item(),
                             iter_plot, epoch_plot, 'append')
 
         if iteration != 0 and iteration % 1000 == 0:
