@@ -80,6 +80,17 @@ def train():
         dataset = COCODetection(root=args.dataset_root,
                                 transform=SSDAugmentation(cfg['min_dim'],
                                                           MEANS))
+    elif args.dataset == 'EP_COCO':
+        if args.dataset_root == VOC_ROOT:
+            if not os.path.exists(COCO_ROOT):
+                parser.error('Must specify dataset_root if specifying dataset')
+            logger.info("WARNING: Using default COCO dataset_root because " +
+                  "--dataset_root was not specified.")
+            args.dataset_root = COCO_ROOT
+        cfg = ep_coco
+        dataset = COCODetection(root=args.dataset_root,
+                                transform=SSDAugmentation(cfg['min_dim'],
+                                                          MEANS))
     elif args.dataset == 'VOC':
         if args.dataset_root == COCO_ROOT:
             parser.error('Must specify dataset if specifying dataset_root')
